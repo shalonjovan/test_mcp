@@ -577,6 +577,37 @@ def register_tools(mcp: FastMCP) -> None:
         }
 
     @mcp.tool()
+    def load_test(
+        url: str = "",
+        method: str = "GET",
+        concurrent_users: int = 10,
+        duration: int = 30,
+        ramp_up: int = 5,
+        think_time: float = 0.0,
+        headers: str = "{}",
+        body: str = "",
+        timeout: int = 30,
+    ) -> dict:
+        """Run a load/stress test against a URL with configurable concurrency.
+
+        Simulates multiple concurrent users making requests with optional
+        ramp-up period and think time. Reports latency percentiles (p50/p95/p99),
+        throughput, error rate, and status code distribution.
+        """
+        from testing_mcp.performance.load_test import run_load_test
+        return run_load_test(
+            url=url,
+            method=method,
+            concurrent_users=concurrent_users,
+            duration=duration,
+            ramp_up=ramp_up,
+            think_time=think_time,
+            headers=headers,
+            body=body,
+            timeout=timeout,
+        )
+
+    @mcp.tool()
     def integration_tests(
         path: str = ".",
         test_patterns: list[str] | None = None,
