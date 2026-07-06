@@ -13,6 +13,18 @@ from testing_mcp.runners.java_runner import (
     run_maven_tests,
 )
 from testing_mcp.runners.python_runner import discover_python_tests, run_pytest
+from testing_mcp.api.testing import discover_api_endpoints, run_api_test_sync
+from testing_mcp.database.validation import (
+    detect_database,
+    test_rollback,
+    validate_constraints,
+    validate_migrations,
+)
+from testing_mcp.performance.benchmark import (
+    measure_api_latency,
+    measure_startup_time,
+    run_locust_benchmark,
+)
 from testing_mcp.ui.playwright import run_ui_test_sync
 
 
@@ -136,3 +148,86 @@ def register_tools(mcp: FastMCP) -> None:
             out_path.write_text(content)
 
         return {"format": format, "content": content, "output_file": output if output else None}
+
+    @mcp.tool()
+    def api_test(
+        base_url: str,
+        method: str = "GET",
+        path: str = "/",
+        headers: dict[str, str] | None = None,
+        body: dict | None = None,
+        expected_status: int = 200,
+        expected_schema: dict | None = None,
+        timeout: float = 30.0,
+    ) -> dict:
+        """Test an API endpoint with request/response validation."""
+        return run_api_test_sync(
+            base_url=base_url,
+            method=method,
+            path=path,
+            headers=headers,
+            body=body,
+            expected_status=expected_status,
+            expected_schema=expected_schema,
+            timeout=timeout,
+        )
+
+    @mcp.tool()
+    def discover_endpoints(
+        base_url: str,
+        paths: list[str] | None = None,
+    ) -> list[dict]:
+        """Discover API endpoints from a base URL."""
+        import asyncio
+        return asyncio.run(discover_api_endpoints(base_url, paths))
+
+    @mcp.tool()
+    def database_validate(
+        path: str = ".",
+        check_type: str = "all",
+    ) -> dict:
+        """Validate database migrations, constraints, and rollbacks."""
+        root = Path(path).resolve()
+        db_types = detect_database(root)
+        db_type = max(db_types, key=db_types.get) if db_types else "sqlite"
+
+        result: dict = {"database_type": db_type, "detected_databases": db_types}
+
+        if check_type in ("all", "migrations"):
+            result["migrations"] = validate_migrations(root, db_type=db_type)
+
+        if check_type in ("all", "constraints"):
+            result["constraints"] = validate_constraints(root, db_type=db_type)
+
+        if check_type in ("all", "rollback"):
+            result["rollback"] = test_rollback(root)
+
+        return result
+
+    @mcp.tool()
+    def performance_test(
+        type: str = "startup",
+        command: str = "",
+        url: str = "",
+        method: str = "GET",
+        iterations: int = 5,
+        users: int = 10,
+        run_time: str = "30s",
+    ) -> dict:
+        """Run performance benchmarks (startup time, API latency, or load test)."""
+        if type == "startup" and command:
+            cmd_parts = command.split()
+            return measure_startup_time(cmd_parts, iterations=iterations)
+
+        if type == "latency" and url:
+            import asyncio
+            return asyncio.run(measure_api_latency(url, method=method, iterations=iterations))
+
+        if type == "load":
+            return run_locust_benchmark(
+                host=url or "http://localhost:8080",
+                users=users,
+                run_time=run_time,
+            )
+
+        return {"error": "Invalid performance test type or missing parameters"}
