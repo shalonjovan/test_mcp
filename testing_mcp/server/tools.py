@@ -240,10 +240,49 @@ def register_tools(mcp: FastMCP) -> None:
         return {"error": "Invalid performance test type or missing parameters"}
 
     @mcp.tool()
-    def security_scan(path: str = ".") -> dict:
-        """Run security scans (Bandit, Semgrep, Trivy) on the project."""
+    def security_scan(
+        path: str = ".",
+        scan_type: str = "all",
+        url: str = "",
+        hostname: str = "",
+        port: int = 443,
+    ) -> dict:
+        """Run security scans on the project.
+
+        Scan types: all, sast, secrets, headers, tls, deps, bandit, semgrep
+        """
         root = Path(path).resolve()
-        return run_security_scan(root)
+        return run_security_scan(
+            path=root,
+            scan_type=scan_type,
+            url=url,
+            hostname=hostname,
+            port=port,
+        )
+
+    @mcp.tool()
+    def scan_sast(path: str = ".") -> dict:
+        """Static analysis: detect SQLi, XSS, CSRF, SSRF, path traversal, weak crypto."""
+        from testing_mcp.security.sast import run_sast_scan
+        return run_sast_scan(path)
+
+    @mcp.tool()
+    def scan_secrets(path: str = ".") -> dict:
+        """Scan for hardcoded secrets, API keys, tokens, and credentials."""
+        from testing_mcp.security.secrets import scan_for_secrets
+        return scan_for_secrets(path)
+
+    @mcp.tool()
+    def scan_headers(url: str) -> dict:
+        """Check HTTP security headers (HSTS, CSP, X-Frame-Options, etc.)."""
+        from testing_mcp.security.headers import scan_headers_sync
+        return scan_headers_sync(url)
+
+    @mcp.tool()
+    def scan_tls(hostname: str, port: int = 443) -> dict:
+        """Check TLS/SSL certificate validity and expiration."""
+        from testing_mcp.security.tls import check_tls
+        return check_tls(hostname, port=port)
 
     @mcp.tool()
     def generate_tests(
