@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "testing-mcp"
+version = "0.1.0"
+description = "Universal AI-powered testing server built on the Model Context Protocol"
+authors = [
+    { name = "CacCat", email = "shalonjovan@gmail.com" }
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.11"
+
+dependencies = [
+    "fastmcp>=0.4.0",
+    "typer>=0.12.0",
+    "toml>=0.10.2",
+    "httpx>=0.27.0",
+    "jinja2>=3.1.0",
+    "rich>=13.7.0",
+    "pydantic>=2.5.0",
+    "playwright>=1.40.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.3.0",
+]
+performance = [
+    "locust>=2.24.0",
+]
+security = [
+    "bandit>=1.7.0",
+    "semgrep>=1.50.0",
+]
+
+[project.scripts]
+testing-mcp = "testing_mcp.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["testing_mcp"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["testing_mcp/tests"]
