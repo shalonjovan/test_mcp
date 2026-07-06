@@ -28,7 +28,11 @@ from testing_mcp.performance.benchmark import (
 from testing_mcp.generators.tests import generate_unit_tests, save_generated_tests
 from testing_mcp.runners.analysis import analyze_failure, suggest_fix
 from testing_mcp.security.scanner import run_security_scan
+from testing_mcp.runners.distributed import check_docker_available, check_kubernetes_available, detect_ci_config, get_infrastructure_info
+from testing_mcp.runners.game_testing import detect_game_project, run_godot_tests, run_unity_tests, run_unreal_tests
+from testing_mcp.runners.mobile import detect_mobile_project, run_android_tests, run_flutter_tests
 from testing_mcp.ui.playwright import run_ui_test_sync
+from testing_mcp.ui.visual_regression import compare_screenshots, generate_diff_gif, take_screenshot
 
 
 def register_tools(mcp: FastMCP) -> None:
@@ -334,3 +338,98 @@ def register_tools(mcp: FastMCP) -> None:
     ) -> list[dict]:
         """Analyze test failures and suggest fixes."""
         return suggest_fix(test_results, source_files=source_files)
+
+    @mcp.tool()
+    def visual_regression(
+        baseline: str,
+        current: str,
+        output_diff: str = "",
+        threshold: float = 0.0,
+    ) -> dict:
+        """Compare two screenshots and highlight visual differences."""
+        return compare_screenshots(baseline, current, output_path=output_diff, threshold=threshold)
+
+    @mcp.tool()
+    def take_screenshot_tool(
+        url: str,
+        output_path: str = "",
+        viewport: dict[str, int] | None = None,
+        full_page: bool = True,
+    ) -> dict:
+        """Take a screenshot of a webpage."""
+        return take_screenshot(url, output_path=output_path, viewport=viewport, full_page=full_page)
+
+    @mcp.tool()
+    def create_diff_gif(
+        baseline: str,
+        current: str,
+        output_path: str = "diff.gif",
+        duration: int = 500,
+    ) -> dict:
+        """Create an animated GIF showing the transition between two screenshots."""
+        return generate_diff_gif(baseline, current, output_path=output_path, duration=duration)
+
+    @mcp.tool()
+    def detect_mobile(path: str = ".") -> dict:
+        """Detect if the project is a mobile app (Android, Flutter, React Native)."""
+        root = Path(path).resolve()
+        return detect_mobile_project(root)
+
+    @mcp.tool()
+    def run_mobile_tests(
+        path: str = ".",
+        platform: str = "android",
+        test_type: str = "unit",
+    ) -> dict:
+        """Run mobile app tests (Android or Flutter)."""
+        root = Path(path).resolve()
+        if platform == "flutter":
+            return run_flutter_tests(root)
+        return run_android_tests(root, test_type=test_type)
+
+    @mcp.tool()
+    def detect_game(path: str = ".") -> dict:
+        """Detect if the project is a game (Godot, Unity, Unreal)."""
+        root = Path(path).resolve()
+        return detect_game_project(root)
+
+    @mcp.tool()
+    def run_game_tests(
+        path: str = ".",
+        engine: str = "auto",
+    ) -> dict:
+        """Run game engine tests."""
+        root = Path(path).resolve()
+        if engine == "auto":
+            detected = detect_game_project(root)
+            engines = detected.get("engines", [])
+            if not engines:
+                return {"error": "No game engine detected"}
+            engine = engines[0]
+
+        if engine == "godot":
+            return run_godot_tests(root)
+        elif engine == "unity":
+            return run_unity_tests(root)
+        elif engine == "unreal":
+            return run_unreal_tests(root)
+        return {"error": f"Unknown engine: {engine}"}
+
+    @mcp.tool()
+    def infrastructure_info(path: str = ".") -> dict:
+        """Get infrastructure info (Docker, K8s, CI config)."""
+        root = Path(path).resolve()
+        return {
+            "infrastructure": get_infrastructure_info(),
+            "ci_config": detect_ci_config(root),
+        }
+
+    @mcp.tool()
+    def check_docker() -> dict:
+        """Check if Docker is available and get info."""
+        return check_docker_available()
+
+    @mcp.tool()
+    def check_kubernetes() -> dict:
+        """Check if Kubernetes is available."""
+        return check_kubernetes_available()
