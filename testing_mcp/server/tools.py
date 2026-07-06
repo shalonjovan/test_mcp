@@ -31,6 +31,20 @@ from testing_mcp.security.scanner import run_security_scan
 from testing_mcp.runners.distributed import check_docker_available, check_kubernetes_available, detect_ci_config, get_infrastructure_info
 from testing_mcp.runners.game_testing import detect_game_project, run_godot_tests, run_unity_tests, run_unreal_tests
 from testing_mcp.runners.mobile import detect_mobile_project, run_android_tests, run_flutter_tests
+from testing_mcp.api.graphql import detect_graphql_endpoint, introspect_schema, run_graphql_query
+from testing_mcp.api.grpc_test import run_grpc_test
+from testing_mcp.api.websocket_test import run_websocket_test
+from testing_mcp.performance.profiler import (
+    get_cpu_info,
+    get_disk_io,
+    get_network_io,
+    measure_memory_usage,
+    measure_startup_resources,
+    profile_api_memory,
+)
+from testing_mcp.runners.integration import run_integration_tests, run_smoke_tests
+from testing_mcp.runners.mutation import run_mutation_test
+from testing_mcp.ui.accessibility import check_color_contrast, check_keyboard_navigation, run_accessibility_scan
 from testing_mcp.ui.playwright import run_ui_test_sync
 from testing_mcp.ui.visual_regression import compare_screenshots, generate_diff_gif, take_screenshot
 
@@ -472,3 +486,120 @@ def register_tools(mcp: FastMCP) -> None:
     def check_kubernetes() -> dict:
         """Check if Kubernetes is available."""
         return check_kubernetes_available()
+
+    @mcp.tool()
+    def accessibility_scan(
+        url: str,
+        standard: str = "wcag2aa",
+        include_iframe: bool = True,
+        timeout: int = 30000,
+    ) -> dict:
+        """Run WCAG accessibility scan using axe-core."""
+        import asyncio
+        return asyncio.run(run_accessibility_scan(url, standard=standard, include_iframe=include_iframe, timeout=timeout))
+
+    @mcp.tool()
+    def check_color_contrast_tool(foreground: str, background: str) -> dict:
+        """Check WCAG color contrast ratio between two colors."""
+        return check_color_contrast(foreground, background)
+
+    @mcp.tool()
+    def graphql_test(
+        url: str,
+        query: str,
+        variables: dict | None = None,
+        timeout: float = 30.0,
+    ) -> dict:
+        """Run a GraphQL query against an endpoint."""
+        import asyncio
+        return asyncio.run(run_graphql_query(url, query, variables=variables, timeout=timeout))
+
+    @mcp.tool()
+    def graphql_introspect(url: str) -> dict:
+        """Introspect a GraphQL schema."""
+        import asyncio
+        return asyncio.run(introspect_schema(url))
+
+    @mcp.tool()
+    def graphql_detect(base_url: str) -> dict:
+        """Detect a GraphQL endpoint at common paths."""
+        import asyncio
+        path = asyncio.run(detect_graphql_endpoint(base_url))
+        return {"found": path is not None, "endpoint": f"{base_url}{path}" if path else None}
+
+    @mcp.tool()
+    def websocket_test(
+        url: str,
+        message: str = "",
+        timeout: float = 10.0,
+    ) -> dict:
+        """Test a WebSocket connection."""
+        import asyncio
+        return asyncio.run(test_websocket(url, message=message or None, timeout=timeout))
+
+    @mcp.tool()
+    def grpc_test(
+        url: str,
+        service: str,
+        method: str,
+        request_body: str = "",
+        timeout: float = 30.0,
+    ) -> dict:
+        """Test a gRPC endpoint."""
+        import asyncio
+        return asyncio.run(test_grpc(url, service=service, method=method, request_body=request_body, timeout=timeout))
+
+    @mcp.tool()
+    def profile_memory(path: str = ".") -> dict:
+        """Measure current process memory usage."""
+        return measure_memory_usage()
+
+    @mcp.tool()
+    def profile_resources(command: str, iterations: int = 3) -> dict:
+        """Measure startup time and resource usage of a command."""
+        from pathlib import Path
+        return measure_startup_resources(command.split(), cwd=Path.cwd(), iterations=iterations)
+
+    @mcp.tool()
+    def profile_api(url: str, iterations: int = 10) -> dict:
+        """Profile API memory and latency."""
+        import asyncio
+        return asyncio.run(profile_api_memory(url, iterations=iterations))
+
+    @mcp.tool()
+    def system_info() -> dict:
+        """Get system resource info (CPU, memory, disk, network)."""
+        return {
+            "cpu": get_cpu_info(),
+            "memory": measure_memory_usage(),
+            "disk": get_disk_io(),
+            "network": get_network_io(),
+        }
+
+    @mcp.tool()
+    def integration_tests(
+        path: str = ".",
+        test_patterns: list[str] | None = None,
+    ) -> dict:
+        """Discover and run integration tests."""
+        root = Path(path).resolve()
+        return run_integration_tests(root, test_patterns=test_patterns)
+
+    @mcp.tool()
+    def smoke_tests(
+        endpoints: list[str] | None = None,
+        commands: list[str] | None = None,
+        path: str = ".",
+    ) -> dict:
+        """Run smoke tests (check endpoints or commands respond)."""
+        root = Path(path).resolve()
+        return run_smoke_tests(root, endpoints=endpoints, commands=commands)
+
+    @mcp.tool()
+    def mutation_test(
+        source_file: str,
+        test_command: str,
+        mutation_types: list[str] | None = None,
+    ) -> dict:
+        """Run mutation tests to evaluate test quality."""
+        return run_mutation_test(source_file, test_command, mutation_types=mutation_types)
