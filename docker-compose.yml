@@ -1,0 +1,11 @@
+services:
+  testing-mcp:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./testing-mcp.toml:/app/testing-mcp.toml:ro
+    environment:
+      - TESTING_MCP_HOST=0.0.0.0
+      - TESTING_MCP_PORT=8080

@@ -114,7 +114,7 @@ def _extract_constraints(sql: str) -> list[dict[str, str]]:
         upper = line.strip().upper()
         if "PRIMARY KEY" in upper:
             constraints.append({"type": "PRIMARY KEY", "definition": line.strip()})
-        if "FOREIGN KEY" in upper:
+        if "FOREIGN KEY" in upper or "REFERENCES" in upper:
             constraints.append({"type": "FOREIGN KEY", "definition": line.strip()})
         if "UNIQUE" in upper and "NOT NULL" in upper:
             constraints.append({"type": "UNIQUE + NOT NULL", "definition": line.strip()})

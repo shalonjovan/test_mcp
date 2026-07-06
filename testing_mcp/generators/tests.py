@@ -77,7 +77,7 @@ def generate_unit_tests(
     if not src_path.exists():
         return {"error": f"File not found: {source_file}"}
 
-    if not functions:
+    if functions is None:
         functions = detect_functions(src_path)
 
     if not functions:

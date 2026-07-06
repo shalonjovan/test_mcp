@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "testing-mcp": {
+      "command": "testing-mcp",
+      "args": ["stdio"],
+      "env": {},
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
