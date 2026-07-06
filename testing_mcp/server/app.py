@@ -4,7 +4,7 @@ from testing_mcp.server.tools import register_tools
 
 mcp = FastMCP(
     "Testing MCP",
-    description="Universal AI-powered testing server built on the Model Context Protocol",
+    instructions="Universal AI-powered testing server built on the Model Context Protocol",
     version="0.1.0",
 )
 

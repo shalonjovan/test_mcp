@@ -101,7 +101,7 @@ def generate_unit_tests(
         capital_name = func[0].upper() + func[1:] if func else func
         test_content = template.format(name=func, CapitalName=capital_name)
 
-        test_filename = f"test_{src_path.stem}.{src_path.suffix}"
+        test_filename = f"test_{src_path.stem}{src_path.suffix}"
         if framework == "jest":
             test_filename = f"{src_path.stem}.test{src_path.suffix}"
 

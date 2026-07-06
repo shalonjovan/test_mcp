@@ -105,6 +105,12 @@ async def run_api_test(
             "error": f"Request timed out after {timeout}s",
             "name": f"{method} {path}",
         }
+    except Exception as e:
+        return {
+            "passed": False,
+            "error": f"Request failed: {e}",
+            "name": f"{method} {path}",
+        }
 
     duration = round(time.time() - start, 3)
     status_ok = response.status_code == expected_status
