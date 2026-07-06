@@ -25,6 +25,9 @@ from testing_mcp.performance.benchmark import (
     measure_startup_time,
     run_locust_benchmark,
 )
+from testing_mcp.generators.tests import generate_unit_tests, save_generated_tests
+from testing_mcp.runners.analysis import analyze_failure, suggest_fix
+from testing_mcp.security.scanner import run_security_scan
 from testing_mcp.ui.playwright import run_ui_test_sync
 
 
@@ -231,3 +234,103 @@ def register_tools(mcp: FastMCP) -> None:
             )
 
         return {"error": "Invalid performance test type or missing parameters"}
+
+    @mcp.tool()
+    def security_scan(path: str = ".") -> dict:
+        """Run security scans (Bandit, Semgrep, Trivy) on the project."""
+        root = Path(path).resolve()
+        return run_security_scan(root)
+
+    @mcp.tool()
+    def generate_tests(
+        source_file: str,
+        framework: str = "auto",
+        functions: list[str] | None = None,
+        dry_run: bool = True,
+    ) -> dict:
+        """Generate unit tests for a source file."""
+        test_data = generate_unit_tests(source_file, framework=framework, functions=functions)
+        save_result = save_generated_tests(test_data, dry_run=dry_run)
+        return {**test_data, **save_result}
+
+    @mcp.tool()
+    def inspect_logs(
+        log_content: str,
+        log_file: str = "",
+        error_patterns: list[str] | None = None,
+    ) -> dict:
+        """Analyze log content for errors and patterns."""
+        if log_file:
+            try:
+                log_content = Path(log_file).read_text()
+            except (OSError, FileNotFoundError) as e:
+                return {"error": f"Could not read log file: {e}"}
+
+        import re
+        patterns = error_patterns or [
+            r"(?i)(error|exception|traceback|failed|failure)",
+            r"(?i)(timeout|timed?\s*out)",
+            r"(?i)(crash|segfault|abort)",
+            r"(?i)(permission denied|access denied)",
+        ]
+
+        lines = log_content.split("\n")
+        matches: list[dict] = []
+        for i, line in enumerate(lines, 1):
+            for pattern in patterns:
+                if re.search(pattern, line):
+                    matches.append({"line": i, "content": line.strip(), "pattern": pattern})
+                    break
+
+        return {
+            "total_lines": len(lines),
+            "matches_found": len(matches),
+            "matches": matches[:100],
+        }
+
+    @mcp.tool()
+    def compare_runs(
+        baseline: list[dict],
+        current: list[dict],
+    ) -> dict:
+        """Compare two test runs and identify regressions."""
+        baseline_map = {r.get("name", ""): r for r in baseline}
+        current_map = {r.get("name", ""): r for r in current}
+
+        regressions: list[dict] = []
+        improvements: list[dict] = []
+        new: list[dict] = []
+        fixed: list[dict] = []
+
+        all_names = set(list(baseline_map.keys()) + list(current_map.keys()))
+
+        for name in all_names:
+            b = baseline_map.get(name)
+            c = current_map.get(name)
+
+            if b and c:
+                if b.get("passed") and not c.get("passed"):
+                    regressions.append({"name": name, "was": "pass", "now": "fail"})
+                elif not b.get("passed") and c.get("passed"):
+                    improvements.append({"name": name, "was": "fail", "now": "pass"})
+            elif b and not c:
+                fixed.append({"name": name, "status": "missing"})
+            elif c and not b:
+                new.append({"name": name, "status": "new"})
+
+        return {
+            "baseline_total": len(baseline),
+            "current_total": len(current),
+            "regressions": regressions,
+            "improvements": improvements,
+            "new_tests": new,
+            "removed_tests": fixed,
+        }
+
+    @mcp.tool()
+    def suggest_fix(
+        test_results: list[dict],
+        source_files: list[str] | None = None,
+    ) -> list[dict]:
+        """Analyze test failures and suggest fixes."""
+        return suggest_fix(test_results, source_files=source_files)
