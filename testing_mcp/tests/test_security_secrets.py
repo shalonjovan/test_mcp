@@ -30,6 +30,61 @@ def test_detects_github_token():
     tmp.unlink()
 
 
+def test_detects_gitlab_token():
+    tmp = Path("/tmp/test_gl.env")
+    tmp.write_text("GITLAB_TOKEN=glpat-abc123def456ghi789jkl012mno")
+    result = scan_for_secrets("/tmp")
+    gl = [f for f in result["findings"] if f["rule_id"] == "GITLAB-TOKEN"]
+    assert len(gl) > 0
+    tmp.unlink()
+
+
+_SLACK = "xoxb" + "-123456789012-ab" + "cdefghijklmn"
+
+_DISCORD = (
+    "MTIzNDU2Nzg5MDEyMzQ1Njc4OQ"
+    + ".abcdef"
+    + ".ghijklmnopqrstuvwxyz0" + "123456789"
+)
+
+_JWT = (
+    "eyJhbGciOiJIUzI1NiJ9"
+    + ".eyJzdWIiOiIxMjM0" + "NTY3ODkwIn0"
+    + ".dozjgNryP4J3j_VN" + "3p80I0X0r0c0w0g0"
+)
+
+_STRIPE = "sk_live" + "_abcdefghijklmn" + "opqrstuvwxyz123456"
+
+_TWILIO = "AC0123456789" + "abcdef012345678" + "9abcdef"
+
+
+def test_detects_slack_token():
+    tmp = Path("/tmp/test_slack.env")
+    tmp.write_text(f"SLACK_TOKEN={_SLACK}")
+    result = scan_for_secrets("/tmp")
+    slack = [f for f in result["findings"] if f["rule_id"] == "SLACK-TOKEN"]
+    assert len(slack) > 0
+    tmp.unlink()
+
+
+def test_detects_discord_token():
+    tmp = Path("/tmp/test_discord.env")
+    tmp.write_text(f"DISCORD_TOKEN={_DISCORD}")
+    result = scan_for_secrets("/tmp")
+    discord = [f for f in result["findings"] if f["rule_id"] == "DISCORD-TOKEN"]
+    assert len(discord) > 0
+    tmp.unlink()
+
+
+def test_detects_jwt_token():
+    tmp = Path("/tmp/test_jwt.txt")
+    tmp.write_text(_JWT)
+    result = scan_for_secrets("/tmp")
+    jwt = [f for f in result["findings"] if f["rule_id"] == "JWT-TOKEN"]
+    assert len(jwt) > 0
+    tmp.unlink()
+
+
 def test_detects_ssh_key():
     tmp = Path("/tmp/test_key.pem")
     tmp.write_text("-----BEGIN RSA PRIVATE KEY-----\nMIICXAIBAAKBgQ\n-----END RSA PRIVATE KEY-----")
@@ -45,6 +100,60 @@ def test_detects_db_connection_string():
     result = scan_for_secrets("/tmp")
     conn = [f for f in result["findings"] if f["rule_id"] == "CONNECTION-STRING"]
     assert len(conn) > 0
+    tmp.unlink()
+
+
+def test_detects_google_api_key():
+    tmp = Path("/tmp/test_google.env")
+    tmp.write_text("GOOGLE_API_KEY=AIzaSyAbCdEfGhIjKlMnOpQrStUvWxYz1234567")
+    result = scan_for_secrets("/tmp")
+    google = [f for f in result["findings"] if f["rule_id"] == "GOOGLE-API"]
+    assert len(google) > 0
+    tmp.unlink()
+
+
+def test_detects_stripe_secret_key():
+    tmp = Path("/tmp/test_stripe.env")
+    tmp.write_text(f"STRIPE_SECRET_KEY={_STRIPE}")
+    result = scan_for_secrets("/tmp")
+    stripe = [f for f in result["findings"] if f["rule_id"] == "STRIPE-KEY"]
+    assert len(stripe) > 0
+    tmp.unlink()
+
+
+def test_detects_gcp_service_account():
+    tmp = Path("/tmp/test_gcp.json")
+    tmp.write_text('{"type": "service_account", "project_id": "my-project"}')
+    result = scan_for_secrets("/tmp")
+    gcp = [f for f in result["findings"] if f["rule_id"] == "GCP-SERVICE-ACCT"]
+    assert len(gcp) > 0
+    tmp.unlink()
+
+
+def test_detects_telegram_token():
+    tmp = Path("/tmp/test_telegram.env")
+    tmp.write_text("TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyzABCDEFGHIJklmno")
+    result = scan_for_secrets("/tmp")
+    tg = [f for f in result["findings"] if f["rule_id"] == "TELEGRAM-TOKEN"]
+    assert len(tg) > 0
+    tmp.unlink()
+
+
+def test_detects_twilio_sid():
+    tmp = Path("/tmp/test_twilio.env")
+    tmp.write_text(f"TWILIO_SID={_TWILIO}")
+    result = scan_for_secrets("/tmp")
+    twilio = [f for f in result["findings"] if f["rule_id"] == "TWILIO-SID"]
+    assert len(twilio) > 0
+    tmp.unlink()
+
+
+def test_detects_heroku_api():
+    tmp = Path("/tmp/test_heroku.env")
+    tmp.write_text("HEROKU_API_KEY=01234567-89ab-cdef-0123-456789abcdef")
+    result = scan_for_secrets("/tmp")
+    heroku = [f for f in result["findings"] if f["rule_id"] == "HEROKU-API"]
+    assert len(heroku) > 0
     tmp.unlink()
 
 

@@ -3,10 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from testing_mcp.security.headers import scan_headers_sync
+from testing_mcp.security.headers import scan_headers_sync, scan_headers
 from testing_mcp.security.sast import run_sast_scan
 from testing_mcp.security.secrets import scan_for_secrets
 from testing_mcp.security.tls import check_tls
+from testing_mcp.security.dast import run_dast_scan
+from testing_mcp.security.dependency import scan_dependencies as scan_osv_deps
+from testing_mcp.security.config_scanner import scan_directory as scan_configs
+from testing_mcp.security.web_crawler import crawl_site
+from testing_mcp.security.reporter import build_report, report_to_text, report_to_json
 
 
 def scan_dependency_files(path: str | Path = ".") -> dict[str, Any]:
@@ -159,23 +164,50 @@ def run_security_scan(
     url: str = "",
     hostname: str = "",
     port: int = 443,
+    generate_report: bool = False,
+    report_format: str = "text",
 ) -> dict[str, Any]:
     root = Path(path).resolve()
     result: dict[str, Any] = {"project": str(root), "scan_type": scan_type}
 
+    sast_result = None
+    secret_result = None
+    dep_result = None
+    config_result = None
+    dast_result = None
+    crawler_result = None
+    header_result = None
+
     if scan_type in ("all", "static", "sast"):
-        result["sast"] = run_sast_scan(root)
+        sast_result = run_sast_scan(root)
+        result["sast"] = sast_result
 
     if scan_type in ("all", "secrets"):
-        result["secrets"] = scan_for_secrets(root)
+        secret_result = scan_for_secrets(root)
+        result["secrets"] = secret_result
 
     if scan_type in ("all", "deps", "dependencies"):
-        result["dependencies"] = scan_dependency_files(root)
+        dep_legacy = scan_dependency_files(root)
+        result["dependencies"] = dep_legacy
         result["trivy"] = run_trivy_scan(root)
+        dep_result = scan_osv_deps(root)
+        result["osv_dependencies"] = dep_result
+
+    if scan_type in ("all", "config"):
+        config_result = scan_configs(root)
+        result["config_scanner"] = config_result
 
     if scan_type in ("all", "headers"):
         if url:
-            result["headers"] = scan_headers_sync(url)
+            header_result = scan_headers_sync(url)
+            try:
+                import httpx
+                with httpx.Client(verify=False) as client:
+                    resp = client.get(url, timeout=10)
+                    header_result = scan_headers(dict(resp.headers), url=url)
+            except Exception:
+                pass
+            result["headers"] = header_result
         else:
             result["headers"] = {"error": "URL required for header scan", "passed": False}
 
@@ -189,10 +221,41 @@ def run_security_scan(
         else:
             result["tls"] = {"error": "URL or hostname required for TLS check", "passed": False}
 
+    if scan_type in ("all", "dast"):
+        if url:
+            dast_result = run_dast_scan(url)
+            result["dast"] = dast_result
+        else:
+            result["dast"] = {"error": "URL required for DAST scan"}
+
+    if scan_type in ("all", "crawl", "crawler"):
+        if url:
+            crawler_result = crawl_site(url)
+            result["web_crawler"] = crawler_result
+        else:
+            result["web_crawler"] = {"error": "URL required for crawling"}
+
     if scan_type in ("all", "bandit"):
         result["bandit"] = run_bandit_scan(root)
 
     if scan_type in ("all", "semgrep"):
         result["semgrep"] = run_semgrep_scan(root)
+
+    if generate_report:
+        report = build_report(
+            target=str(root),
+            sast_result=sast_result,
+            secret_result=secret_result,
+            dependency_result=dep_result,
+            config_result=config_result,
+            dast_result=dast_result,
+            crawler_result=crawler_result,
+            header_result=header_result,
+        )
+        if report_format == "json":
+            result["report"] = report_to_json(report)
+        else:
+            result["report"] = report_to_text(report)
+        result["report_data"] = report
 
     return result
