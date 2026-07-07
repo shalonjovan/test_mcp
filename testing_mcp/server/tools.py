@@ -634,3 +634,39 @@ def register_tools(mcp: FastMCP) -> None:
     ) -> dict:
         """Run mutation tests to evaluate test quality."""
         return run_mutation_test(source_file, test_command, mutation_types=mutation_types)
+
+    @mcp.tool()
+    def fix_gitignore(
+        path: str = ".",
+        patterns: list[str] | None = None,
+    ) -> dict:
+        """Add missing entries to .gitignore to prevent credential exposure."""
+        from testing_mcp.fix.gitignore import add_to_gitignore
+        return add_to_gitignore(path=path, patterns=patterns)
+
+    @mcp.tool()
+    def generate_dockerfile(
+        path: str = ".",
+    ) -> dict:
+        """Generate a Dockerfile based on project language detection."""
+        from testing_mcp.fix.docker import generate_dockerfile
+        return generate_dockerfile(path=path)
+
+    @mcp.tool()
+    def generate_ci_workflow(
+        path: str = ".",
+        ci_type: str = "github-actions",
+    ) -> dict:
+        """Generate CI workflow config (GitHub Actions or GitLab CI)."""
+        from testing_mcp.fix.ci import generate_ci_workflow
+        return generate_ci_workflow(path=path, ci_type=ci_type)
+
+    @mcp.tool()
+    def extract_migration(
+        path: str = ".",
+        db_type: str = "sqlite",
+        output_dir: str = "",
+    ) -> dict:
+        """Extract inline SQL schemas from source code into migration files."""
+        from testing_mcp.fix.migrations import extract_schema_migrations
+        return extract_schema_migrations(path=path, db_type=db_type, output_dir=output_dir)
