@@ -4,9 +4,9 @@ from pathlib import Path
 import pytest
 
 from testing_mcp.exceptions import ToolError, ValidationError
-from testing_mcp.server.tools import _resolve_path, _resolve_url, validate_command
+from testing_mcp.server.tools import _resolve_path, _resolve_url
 from testing_mcp.utils.response import ToolResponse, failure
-from testing_mcp.utils.validators import validate_project_path, validate_url
+from testing_mcp.utils.validators import validate_command, validate_project_path, validate_url
 
 
 def test_validate_project_path_resolves():
