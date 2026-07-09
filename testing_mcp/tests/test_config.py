@@ -1,10 +1,10 @@
 from pathlib import Path
 
-from testing_mcp.utils.config import _deep_merge, load_config
+from testing_mcp.utils.config import _deep_merge, load_raw_config
 
 
 def test_load_config_defaults():
-    config = load_config()
+    config = load_raw_config()
     assert "server" in config
     assert config["server"]["host"] == "127.0.0.1"
     assert config["server"]["port"] == 8080

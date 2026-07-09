@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from fastmcp import FastMCP
 
+from testing_mcp import __version__
 from testing_mcp.analyzers.project import analyze_project
+from testing_mcp.server.state import get_start_time
 from testing_mcp.reporters.report import generate_html_report, generate_json_report, generate_markdown_report
 from testing_mcp.runners.console import run_console_test, run_fuzz_test
 from testing_mcp.runners.java_runner import (
@@ -52,8 +55,23 @@ from testing_mcp.browser import new_session, get_session, set_active_session, cl
 
 def register_tools(mcp: FastMCP) -> None:
     @mcp.tool()
-    def ping() -> str:
-        return "pong"
+    def ping() -> dict:
+        """Health check. Returns server status, version, and uptime."""
+        uptime = time.time() - get_start_time()
+        # Count tools from provider components
+        tool_count = 0
+        for p in mcp.providers:
+            try:
+                components = getattr(p, "_components", {})
+                tool_count += sum(1 for k in components if k.startswith("tool:"))
+            except Exception:
+                pass
+        return {
+            "status": "ok",
+            "version": __version__,
+            "uptime_seconds": round(uptime, 2),
+            "tools_registered": tool_count,
+        }
 
     @mcp.tool()
     def analyze_project_tool(path: str = ".") -> dict:
