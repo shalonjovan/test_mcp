@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import re
+import json
 import subprocess
 from pathlib import Path
 
-from testing_mcp.runners.base import TestResult
+from testing_mcp.runners.base import TestResult, handle_timeout, handle_not_found, run_subprocess
 
 
 def discover_rust_tests(project_root: Path) -> list[str]:
@@ -30,24 +30,21 @@ def run_cargo_test(
     cmd.append("--")
 
     try:
-        proc = subprocess.run(
+        proc = run_subprocess(
             cmd + ["--color=never", "--format=json"],
             cwd=project_root,
-            capture_output=True,
-            text=True,
             timeout=timeout,
         )
     except subprocess.TimeoutExpired:
-        return [TestResult(passed=False, name="cargo-test", message="Timeout exceeded")]
+        return handle_timeout("cargo-test")
     except FileNotFoundError:
-        return [TestResult(passed=False, name="cargo-test", message="Cargo/Rust not installed")]
+        return handle_not_found("cargo-test", "Cargo/Rust")
 
     results: list[TestResult] = []
     for line in proc.stdout.split("\n"):
         if not line.strip():
             continue
         try:
-            import json
             event = json.loads(line)
             if event.get("type") == "test":
                 name = event.get("name", "unknown")

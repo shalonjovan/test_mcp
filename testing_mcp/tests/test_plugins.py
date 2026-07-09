@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from testing_mcp.plugins.base import LanguagePlugin, Plugin, PluginManager
+from testing_mcp.plugins.base import LanguagePlugin, PluginManager
 
 
 class MockLanguagePlugin(LanguagePlugin):

@@ -4,6 +4,8 @@ import time
 
 from testing_mcp.utils.config import Settings
 
+__all__ = ["get_settings", "set_settings", "get_start_time"]
+
 _settings: Settings | None = None
 _start_time: float = time.time()
 

@@ -4,7 +4,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from testing_mcp.runners.base import TestResult
+from testing_mcp.runners.base import TestResult, handle_timeout, run_subprocess
 
 
 def detect_js_project(project_root: Path) -> dict[str, float]:
@@ -59,15 +59,9 @@ def run_jest(
         cmd.extend(test_paths)
 
     try:
-        proc = subprocess.run(
-            cmd,
-            cwd=project_root,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
+        proc = run_subprocess(cmd, cwd=project_root, timeout=timeout)
     except subprocess.TimeoutExpired:
-        return [TestResult(passed=False, name="jest", message="Timeout exceeded")]
+        return handle_timeout("jest")
 
     try:
         report = json.loads(proc.stdout)
@@ -109,15 +103,9 @@ def run_vitest(
         cmd.extend(test_paths)
 
     try:
-        proc = subprocess.run(
-            cmd,
-            cwd=project_root,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
+        proc = run_subprocess(cmd, cwd=project_root, timeout=timeout)
     except subprocess.TimeoutExpired:
-        return [TestResult(passed=False, name="vitest", message="Timeout exceeded")]
+        return handle_timeout("vitest")
 
     try:
         report = json.loads(proc.stdout)

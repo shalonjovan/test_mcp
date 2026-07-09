@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Any
 
 
 def generate_markdown_report(results: list[dict], title: str = "Test Report") -> str:

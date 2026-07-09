@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,38 @@ class TestResult:
         }
 
 
+def run_subprocess(
+    cmd: list[str],
+    *,
+    cwd: Path | None = None,
+    timeout: int = 120,
+    env_add: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess:
+    """Run a subprocess with proper error handling and env merging."""
+    env = os.environ.copy()
+    if env_add:
+        env.update(env_add)
+    return subprocess.run(
+        cmd,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        env=env,
+    )
+
+
+def handle_timeout(name: str) -> list[TestResult]:
+    """Standardized timeout error result for runner functions."""
+    return [TestResult(passed=False, name=name, message="Timeout exceeded")]
+
+
+def handle_not_found(name: str, tool: str = "") -> list[TestResult]:
+    """Standardized 'tool not installed' error result."""
+    msg = f"{tool} not installed" if tool else "Command not found"
+    return [TestResult(passed=False, name=name, message=msg)]
+
+
 class TestRunner:
     def __init__(self, project_root: Path):
         self.project_root = project_root
@@ -43,8 +76,9 @@ class TestRunner:
         timeout: int = 120,
         env: dict[str, str] | None = None,
     ) -> subprocess.CompletedProcess:
-        final_env = {**dict(Path("/").glob("**/*")), **{}}  # placeholder
-        final_env = None
+        final_env = os.environ.copy()
+        if env:
+            final_env.update(env)
         return subprocess.run(
             cmd,
             cwd=self.project_root,

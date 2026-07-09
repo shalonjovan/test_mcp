@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
 
 from testing_mcp.performance.load_test import run_load_test
 

@@ -46,7 +46,7 @@ async def run_graphql_query(
     except httpx.ConnectError:
         return {"error": f"Could not connect to {url}", "passed": False}
     except httpx.TimeoutException:
-        return {"error": f"Request timed out", "passed": False}
+        return {"error": "Request timed out", "passed": False}
     except Exception as e:
         return {"error": str(e), "passed": False}
 

@@ -1,4 +1,3 @@
-import tempfile
 from pathlib import Path
 
 from testing_mcp.security.dependency import (

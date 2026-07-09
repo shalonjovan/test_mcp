@@ -2,6 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
+__all__ = [
+    "ToolError",
+    "ValidationError",
+    "NotFoundError",
+    "PermissionError_",
+    "TimeoutError_",
+]
+
 
 class ToolError(Exception):
     """Base exception for all tool errors."""

@@ -1,4 +1,3 @@
-import pytest
 
 from testing_mcp.api.testing import run_api_test_sync
 

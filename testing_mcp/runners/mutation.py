@@ -125,7 +125,7 @@ def run_mutation_test(
             killed = proc.returncode == 0
         except subprocess.TimeoutExpired:
             killed = False
-        except Exception as e:
+        except Exception:
             killed = False
 
         Path(tmp_path).unlink(missing_ok=True)

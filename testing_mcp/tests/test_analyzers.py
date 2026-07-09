@@ -1,6 +1,5 @@
 from pathlib import Path
 
-import pytest
 
 from testing_mcp.analyzers.project import analyze_project
 

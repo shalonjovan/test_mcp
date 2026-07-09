@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from pathlib import Path
 
@@ -7,36 +8,19 @@ from fastmcp import FastMCP
 
 from testing_mcp import __version__
 from testing_mcp.analyzers.project import analyze_project
-from testing_mcp.server.state import get_start_time
-from testing_mcp.reporters.report import generate_html_report, generate_json_report, generate_markdown_report
-from testing_mcp.runners.console import run_console_test, run_fuzz_test
-from testing_mcp.runners.java_runner import (
-    discover_java_tests,
-    run_gradle_tests,
-    run_maven_tests,
-)
-from testing_mcp.runners.python_runner import discover_python_tests, run_pytest
-from testing_mcp.api.testing import discover_api_endpoints, run_api_test_sync
-from testing_mcp.database.validation import (
-    detect_database,
-    test_rollback,
-    validate_constraints,
-    validate_migrations,
-)
-from testing_mcp.performance.benchmark import (
-    measure_api_latency,
-    measure_startup_time,
-    run_locust_benchmark,
-)
-from testing_mcp.generators.tests import generate_unit_tests, save_generated_tests
-from testing_mcp.runners.analysis import analyze_failure, suggest_fix
-from testing_mcp.security.scanner import run_security_scan
-from testing_mcp.runners.distributed import check_docker_available, check_kubernetes_available, detect_ci_config, get_infrastructure_info
-from testing_mcp.runners.game_testing import detect_game_project, run_godot_tests, run_unity_tests, run_unreal_tests
-from testing_mcp.runners.mobile import detect_mobile_project, run_android_tests, run_flutter_tests
 from testing_mcp.api.graphql import detect_graphql_endpoint, introspect_schema, run_graphql_query
-from testing_mcp.api.grpc_test import run_grpc_test
-from testing_mcp.api.websocket_test import run_websocket_test
+from testing_mcp.api.grpc_test import run_grpc_test as run_grpc
+from testing_mcp.api.testing import discover_api_endpoints, run_api_test_sync
+from testing_mcp.api.websocket_test import run_websocket_test as run_ws
+from testing_mcp.browser import close_session, get_session, list_sessions, new_session, set_active_session
+from testing_mcp.database.validation import detect_database, test_rollback, validate_constraints, validate_migrations
+from testing_mcp.fix.ci import generate_ci_workflow as _gen_ci
+from testing_mcp.fix.docker import generate_dockerfile as _gen_docker
+from testing_mcp.fix.gitignore import add_to_gitignore
+from testing_mcp.fix.migrations import extract_schema_migrations
+from testing_mcp.generators.tests import generate_unit_tests, save_generated_tests
+from testing_mcp.performance.benchmark import measure_api_latency, measure_startup_time, run_locust_benchmark
+from testing_mcp.performance.load_test import run_load_test
 from testing_mcp.performance.profiler import (
     get_cpu_info,
     get_disk_io,
@@ -45,12 +29,36 @@ from testing_mcp.performance.profiler import (
     measure_startup_resources,
     profile_api_memory,
 )
+from testing_mcp.reporters.report import generate_html_report, generate_json_report, generate_markdown_report
+from testing_mcp.runners.analysis import suggest_fix as _suggest_fix
+from testing_mcp.runners.console import run_console_test, run_fuzz_test
+from testing_mcp.runners.distributed import check_docker_available, check_kubernetes_available, detect_ci_config, get_infrastructure_info
+from testing_mcp.runners.game_testing import detect_game_project, run_godot_tests, run_unity_tests, run_unreal_tests
 from testing_mcp.runners.integration import run_integration_tests, run_smoke_tests
+from testing_mcp.runners.java_runner import discover_java_tests, run_gradle_tests, run_maven_tests
+from testing_mcp.runners.mobile import detect_mobile_project, run_android_tests, run_flutter_tests
 from testing_mcp.runners.mutation import run_mutation_test
-from testing_mcp.ui.accessibility import check_color_contrast, check_keyboard_navigation, run_accessibility_scan
+from testing_mcp.runners.python_runner import discover_python_tests, run_pytest
+from testing_mcp.security.headers import scan_headers_sync
+from testing_mcp.security.sast import run_sast_scan
+from testing_mcp.security.scanner import run_security_scan
+from testing_mcp.security.secrets import scan_for_secrets
+from testing_mcp.security.tls import check_tls
+from testing_mcp.server.state import get_start_time
+from testing_mcp.ui.accessibility import check_color_contrast, run_accessibility_scan
 from testing_mcp.ui.playwright import run_ui_test_sync
 from testing_mcp.ui.visual_regression import compare_screenshots, generate_diff_gif, take_screenshot
-from testing_mcp.browser import new_session, get_session, set_active_session, close_session, list_sessions
+
+
+__all__ = ["register_tools"]
+
+
+def _browser_sess(session_id: str) -> tuple:
+    """Get a browser session or (None, error_dict) if missing."""
+    sess = get_session(session_id)
+    if not sess:
+        return None, {"success": False, "error": "No active session. Call browser_new_session first."}
+    return sess, None
 
 
 def register_tools(mcp: FastMCP) -> None:
@@ -218,7 +226,6 @@ def register_tools(mcp: FastMCP) -> None:
         paths: list[str] | None = None,
     ) -> list[dict]:
         """Discover API endpoints from a base URL."""
-        import asyncio
         return asyncio.run(discover_api_endpoints(base_url, paths))
 
     @mcp.tool()
@@ -260,7 +267,6 @@ def register_tools(mcp: FastMCP) -> None:
             return measure_startup_time(cmd_parts, iterations=iterations)
 
         if type == "latency" and url:
-            import asyncio
             return asyncio.run(measure_api_latency(url, method=method, iterations=iterations))
 
         if type == "load":
@@ -296,25 +302,21 @@ def register_tools(mcp: FastMCP) -> None:
     @mcp.tool()
     def scan_sast(path: str = ".") -> dict:
         """Static analysis: detect SQLi, XSS, CSRF, SSRF, path traversal, weak crypto."""
-        from testing_mcp.security.sast import run_sast_scan
         return run_sast_scan(path)
 
     @mcp.tool()
     def scan_secrets(path: str = ".") -> dict:
         """Scan for hardcoded secrets, API keys, tokens, and credentials."""
-        from testing_mcp.security.secrets import scan_for_secrets
         return scan_for_secrets(path)
 
     @mcp.tool()
     def scan_headers(url: str) -> dict:
         """Check HTTP security headers (HSTS, CSP, X-Frame-Options, etc.)."""
-        from testing_mcp.security.headers import scan_headers_sync
         return scan_headers_sync(url)
 
     @mcp.tool()
     def scan_tls(hostname: str, port: int = 443) -> dict:
         """Check TLS/SSL certificate validity and expiration."""
-        from testing_mcp.security.tls import check_tls
         return check_tls(hostname, port=port)
 
     @mcp.tool()
@@ -409,7 +411,7 @@ def register_tools(mcp: FastMCP) -> None:
         source_files: list[str] | None = None,
     ) -> list[dict]:
         """Analyze test failures and suggest fixes."""
-        return suggest_fix(test_results, source_files=source_files)
+        return _suggest_fix(test_results, source_files=source_files)
 
     @mcp.tool()
     def visual_regression(
@@ -514,7 +516,6 @@ def register_tools(mcp: FastMCP) -> None:
         timeout: int = 30000,
     ) -> dict:
         """Run WCAG accessibility scan using axe-core."""
-        import asyncio
         return asyncio.run(run_accessibility_scan(url, standard=standard, include_iframe=include_iframe, timeout=timeout))
 
     @mcp.tool()
@@ -530,19 +531,16 @@ def register_tools(mcp: FastMCP) -> None:
         timeout: float = 30.0,
     ) -> dict:
         """Run a GraphQL query against an endpoint."""
-        import asyncio
         return asyncio.run(run_graphql_query(url, query, variables=variables, timeout=timeout))
 
     @mcp.tool()
     def graphql_introspect(url: str) -> dict:
         """Introspect a GraphQL schema."""
-        import asyncio
         return asyncio.run(introspect_schema(url))
 
     @mcp.tool()
     def graphql_detect(base_url: str) -> dict:
         """Detect a GraphQL endpoint at common paths."""
-        import asyncio
         path = asyncio.run(detect_graphql_endpoint(base_url))
         return {"found": path is not None, "endpoint": f"{base_url}{path}" if path else None}
 
@@ -553,8 +551,7 @@ def register_tools(mcp: FastMCP) -> None:
         timeout: float = 10.0,
     ) -> dict:
         """Test a WebSocket connection."""
-        import asyncio
-        return asyncio.run(test_websocket(url, message=message or None, timeout=timeout))
+        return asyncio.run(run_ws(url, message=message or None, timeout=timeout))
 
     @mcp.tool()
     def grpc_test(
@@ -565,8 +562,7 @@ def register_tools(mcp: FastMCP) -> None:
         timeout: float = 30.0,
     ) -> dict:
         """Test a gRPC endpoint."""
-        import asyncio
-        return asyncio.run(test_grpc(url, service=service, method=method, request_body=request_body, timeout=timeout))
+        return asyncio.run(run_grpc(url, service=service, method=method, request_body=request_body, timeout=timeout))
 
     @mcp.tool()
     def profile_memory(path: str = ".") -> dict:
@@ -582,7 +578,6 @@ def register_tools(mcp: FastMCP) -> None:
     @mcp.tool()
     def profile_api(url: str, iterations: int = 10) -> dict:
         """Profile API memory and latency."""
-        import asyncio
         return asyncio.run(profile_api_memory(url, iterations=iterations))
 
     @mcp.tool()
@@ -613,7 +608,6 @@ def register_tools(mcp: FastMCP) -> None:
         ramp-up period and think time. Reports latency percentiles (p50/p95/p99),
         throughput, error rate, and status code distribution.
         """
-        from testing_mcp.performance.load_test import run_load_test
         return run_load_test(
             url=url,
             method=method,
@@ -660,7 +654,6 @@ def register_tools(mcp: FastMCP) -> None:
         patterns: list[str] | None = None,
     ) -> dict:
         """Add missing entries to .gitignore to prevent credential exposure."""
-        from testing_mcp.fix.gitignore import add_to_gitignore
         return add_to_gitignore(path=path, patterns=patterns)
 
     @mcp.tool()
@@ -668,8 +661,7 @@ def register_tools(mcp: FastMCP) -> None:
         path: str = ".",
     ) -> dict:
         """Generate a Dockerfile based on project language detection."""
-        from testing_mcp.fix.docker import generate_dockerfile
-        return generate_dockerfile(path=path)
+        return _gen_docker(path=path)
 
     @mcp.tool()
     def generate_ci_workflow(
@@ -677,8 +669,7 @@ def register_tools(mcp: FastMCP) -> None:
         ci_type: str = "github-actions",
     ) -> dict:
         """Generate CI workflow config (GitHub Actions or GitLab CI)."""
-        from testing_mcp.fix.ci import generate_ci_workflow
-        return generate_ci_workflow(path=path, ci_type=ci_type)
+        return _gen_ci(path=path, ci_type=ci_type)
 
     @mcp.tool()
     def extract_migration(
@@ -687,7 +678,6 @@ def register_tools(mcp: FastMCP) -> None:
         output_dir: str = "",
     ) -> dict:
         """Extract inline SQL schemas from source code into migration files."""
-        from testing_mcp.fix.migrations import extract_schema_migrations
         return extract_schema_migrations(path=path, db_type=db_type, output_dir=output_dir)
 
     @mcp.tool()
@@ -703,7 +693,6 @@ def register_tools(mcp: FastMCP) -> None:
         """Create a new stealth browser session with anti-bot fingerprinting.
         Uses realistic viewport, user agent, timezone, and stealth JS overrides
         to bypass Cloudflare and other bot detection systems."""
-        import asyncio
         return asyncio.run(new_session(
             session_id=session_id,
             viewport={"width": viewport_width, "height": viewport_height},
@@ -726,7 +715,6 @@ def register_tools(mcp: FastMCP) -> None:
     @mcp.tool()
     def browser_close_session(session_id: str = "") -> dict:
         """Close a browser session (defaults to active session)."""
-        import asyncio
         return asyncio.run(close_session(session_id))
 
     @mcp.tool()
@@ -740,115 +728,72 @@ def register_tools(mcp: FastMCP) -> None:
         """Navigate to a URL using the stealth browser session.
         Automatically handles Cloudflare challenges with retry logic.
         Returns page title, status code, and optional base64 screenshot."""
-        import asyncio
-        sess = get_session(session_id)
-        if not sess:
-            return {"success": False, "error": "No active session. Call browser_new_session first."}
-        return asyncio.run(sess.navigate(
-            url=url,
-            wait_until=wait_until,
-            timeout=timeout,
-            screenshot=screenshot,
-        ))
+        sess, err = _browser_sess(session_id)
+        if err:
+            return err
+        return asyncio.run(sess.navigate(url=url, wait_until=wait_until, timeout=timeout, screenshot=screenshot))
 
     @mcp.tool()
-    def browser_click(
-        selector: str,
-        session_id: str = "",
-        wait_after: int = 2000,
-        timeout: int = 10000,
-    ) -> dict:
+    def browser_click(selector: str, session_id: str = "", wait_after: int = 2000, timeout: int = 10000) -> dict:
         """Click an element identified by CSS selector."""
-        import asyncio
-        sess = get_session(session_id)
-        if not sess:
-            return {"success": False, "error": "No active session"}
+        sess, err = _browser_sess(session_id)
+        if err:
+            return err
         return asyncio.run(sess.click(selector, wait_after=wait_after, timeout=timeout))
 
     @mcp.tool()
-    def browser_fill(
-        selector: str,
-        value: str,
-        session_id: str = "",
-        timeout: int = 10000,
-    ) -> dict:
+    def browser_fill(selector: str, value: str, session_id: str = "", timeout: int = 10000) -> dict:
         """Fill a form field identified by CSS selector."""
-        import asyncio
-        sess = get_session(session_id)
-        if not sess:
-            return {"success": False, "error": "No active session"}
+        sess, err = _browser_sess(session_id)
+        if err:
+            return err
         return asyncio.run(sess.fill(selector, value, timeout=timeout))
 
     @mcp.tool()
-    def browser_select_option(
-        selector: str,
-        value: str,
-        session_id: str = "",
-        timeout: int = 10000,
-    ) -> dict:
+    def browser_select_option(selector: str, value: str, session_id: str = "", timeout: int = 10000) -> dict:
         """Select an option from a dropdown/select element."""
-        import asyncio
-        sess = get_session(session_id)
-        if not sess:
-            return {"success": False, "error": "No active session"}
+        sess, err = _browser_sess(session_id)
+        if err:
+            return err
         return asyncio.run(sess.select_option(selector, value, timeout=timeout))
 
     @mcp.tool()
-    def browser_get_text(
-        selector: str = "body",
-        session_id: str = "",
-        timeout: int = 5000,
-    ) -> dict:
+    def browser_get_text(selector: str = "body", session_id: str = "", timeout: int = 5000) -> dict:
         """Get visible text content from a page element."""
-        import asyncio
-        sess = get_session(session_id)
-        if not sess:
-            return {"success": False, "error": "No active session"}
+        sess, err = _browser_sess(session_id)
+        if err:
+            return err
         return asyncio.run(sess.get_text(selector, timeout=timeout))
 
     @mcp.tool()
-    def browser_get_html(
-        selector: str = "body",
-        session_id: str = "",
-    ) -> dict:
+    def browser_get_html(selector: str = "body", session_id: str = "") -> dict:
         """Get the full page HTML or inner HTML of a specific element."""
-        import asyncio
-        sess = get_session(session_id)
-        if not sess:
-            return {"success": False, "error": "No active session"}
+        sess, err = _browser_sess(session_id)
+        if err:
+            return err
         return asyncio.run(sess.get_html(selector))
 
     @mcp.tool()
-    def browser_evaluate(
-        js: str,
-        session_id: str = "",
-    ) -> dict:
+    def browser_evaluate(js: str, session_id: str = "") -> dict:
         """Execute JavaScript in the browser page and return the result."""
-        import asyncio
-        sess = get_session(session_id)
-        if not sess:
-            return {"success": False, "error": "No active session"}
+        sess, err = _browser_sess(session_id)
+        if err:
+            return err
         return asyncio.run(sess.evaluate(js))
 
     @mcp.tool()
-    def browser_screenshot(
-        path: str = "",
-        full_page: bool = True,
-        session_id: str = "",
-    ) -> dict:
+    def browser_screenshot(path: str = "", full_page: bool = True, session_id: str = "") -> dict:
         """Take a screenshot of the current page.
         If path is empty, returns base64-encoded PNG."""
-        import asyncio
-        sess = get_session(session_id)
-        if not sess:
-            return {"success": False, "error": "No active session"}
+        sess, err = _browser_sess(session_id)
+        if err:
+            return err
         return asyncio.run(sess.screenshot(path=path, full_page=full_page))
 
     @mcp.tool()
     def browser_get_cookies(session_id: str = "") -> dict:
         """Get all cookies from the current browser session."""
-        import asyncio
-        sess = get_session(session_id)
-        if not sess:
-            return {"success": False, "error": "No active session"}
+        sess, err = _browser_sess(session_id)
+        if err:
+            return err
         return asyncio.run(sess.get_cookies())

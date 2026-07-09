@@ -4,7 +4,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from testing_mcp.runners.base import TestResult
+from testing_mcp.runners.base import TestResult, handle_timeout, run_subprocess
 
 
 def discover_python_tests(project_root: Path) -> list[str]:
@@ -30,15 +30,9 @@ def run_pytest(
         cmd.extend(test_paths)
 
     try:
-        proc = subprocess.run(
-            cmd,
-            cwd=project_root,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
+        proc = run_subprocess(cmd, cwd=project_root, timeout=timeout)
     except subprocess.TimeoutExpired:
-        return [TestResult(passed=False, name="pytest", message="Timeout exceeded")]
+        return handle_timeout("pytest")
 
     report_file = project_root / ".report.json"
     results: list[TestResult] = []

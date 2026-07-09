@@ -3,7 +3,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from testing_mcp.runners.base import TestResult
+from testing_mcp.runners.base import TestResult, handle_timeout, handle_not_found, run_subprocess
 
 
 def discover_go_tests(project_root: Path) -> list[str]:
@@ -22,17 +22,11 @@ def run_go_test(
     timeout: int = 120,
 ) -> list[TestResult]:
     try:
-        proc = subprocess.run(
-            ["go", "test", test_pattern, "-v"],
-            cwd=project_root,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
+        proc = run_subprocess(["go", "test", test_pattern, "-v"], cwd=project_root, timeout=timeout)
     except subprocess.TimeoutExpired:
-        return [TestResult(passed=False, name="go-test", message="Timeout exceeded")]
+        return handle_timeout("go-test")
     except FileNotFoundError:
-        return [TestResult(passed=False, name="go-test", message="Go not installed")]
+        return handle_not_found("go-test", "Go")
 
     results: list[TestResult] = []
     current_package = ""

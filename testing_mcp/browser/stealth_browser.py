@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import time
 import uuid
-from pathlib import Path
 from typing import Any
 
 STEALTH_INIT_SCRIPT = """
@@ -77,6 +76,28 @@ class BrowserSession:
         self._last_active: float = 0.0
         self._navigations: int = 0
         self._errors: list[str] = []
+
+    def _guard_page(self, default_result: dict | None = None) -> dict | None:
+        """If page is not open, return an error dict. Otherwise return None."""
+        if not self._page:
+            return {"success": False, "error": "Session not started"}
+        return None
+
+    async def _page_op(self, fn, **defaults) -> dict:
+        """Wrap a page operation with guard + exception handling."""
+        guard = self._guard_page(defaults)
+        if guard:
+            return guard
+        result: dict = {"success": True}
+        result.update(defaults)
+        try:
+            await fn(result)
+        except Exception as e:
+            result["success"] = False
+            result["error"] = str(e)
+            self._errors.append(str(e)[:200])
+        self._last_active = time.time()
+        return result
 
     @property
     def is_open(self) -> bool:
@@ -233,23 +254,13 @@ class BrowserSession:
         wait_after: int = 2000,
         timeout: int = 10000,
     ) -> dict[str, Any]:
-        if not self._page:
-            return {"success": False, "error": "Session not started"}
-
-        result: dict[str, Any] = {"success": True, "selector": selector}
-
-        try:
+        async def _action(result: dict) -> None:
             await self._page.click(selector, timeout=timeout)
             await self._page.wait_for_timeout(wait_after)
             result["url"] = self._page.url
             result["title"] = await self._page.title()
-            self._last_active = time.time()
-        except Exception as e:
-            result["success"] = False
-            result["error"] = str(e)
-            self._errors.append(str(e)[:200])
 
-        return result
+        return await self._page_op(_action, selector=selector)
 
     async def fill(
         self,
@@ -257,20 +268,10 @@ class BrowserSession:
         value: str,
         timeout: int = 10000,
     ) -> dict[str, Any]:
-        if not self._page:
-            return {"success": False, "error": "Session not started"}
-
-        result: dict[str, Any] = {"success": True, "selector": selector}
-
-        try:
+        async def _action(result: dict) -> None:
             await self._page.fill(selector, value, timeout=timeout)
-            self._last_active = time.time()
-        except Exception as e:
-            result["success"] = False
-            result["error"] = str(e)
-            self._errors.append(str(e)[:200])
 
-        return result
+        return await self._page_op(_action, selector=selector)
 
     async def select_option(
         self,
@@ -278,27 +279,13 @@ class BrowserSession:
         value: str,
         timeout: int = 10000,
     ) -> dict[str, Any]:
-        if not self._page:
-            return {"success": False, "error": "Session not started"}
-
-        result: dict[str, Any] = {"success": True, "selector": selector}
-
-        try:
+        async def _action(result: dict) -> None:
             await self._page.select_option(selector, value, timeout=timeout)
-            self._last_active = time.time()
-        except Exception as e:
-            result["success"] = False
-            result["error"] = str(e)
 
-        return result
+        return await self._page_op(_action, selector=selector)
 
     async def get_text(self, selector: str = "body", timeout: int = 5000) -> dict[str, Any]:
-        if not self._page:
-            return {"success": False, "error": "Session not started"}
-
-        result: dict[str, Any] = {"success": True}
-
-        try:
+        async def _action(result: dict) -> None:
             element = await self._page.wait_for_selector(selector, timeout=timeout)
             if element:
                 text = await element.text_content()
@@ -306,19 +293,11 @@ class BrowserSession:
             else:
                 result["text"] = ""
                 result["warning"] = f"Selector '{selector}' not found"
-        except Exception as e:
-            result["success"] = False
-            result["error"] = str(e)
 
-        return result
+        return await self._page_op(_action)
 
     async def get_html(self, selector: str = "body") -> dict[str, Any]:
-        if not self._page:
-            return {"success": False, "error": "Session not started"}
-
-        result: dict[str, Any] = {"success": True}
-
-        try:
+        async def _action(result: dict) -> None:
             if selector == "body":
                 html = await self._page.content()
             else:
@@ -329,55 +308,39 @@ class BrowserSession:
                     html = ""
             result["html"] = html
             result["length"] = len(html)
-        except Exception as e:
-            result["success"] = False
-            result["error"] = str(e)
 
-        return result
+        return await self._page_op(_action)
 
     async def evaluate(self, js: str) -> dict[str, Any]:
-        if not self._page:
-            return {"success": False, "error": "Session not started"}
-
-        result: dict[str, Any] = {"success": True}
-
-        try:
+        async def _action(result: dict) -> None:
             value = await self._page.evaluate(js)
             result["result"] = value
-        except Exception as e:
-            result["success"] = False
-            result["error"] = str(e)
 
-        return result
+        return await self._page_op(_action)
 
     async def screenshot(
         self,
         path: str = "",
         full_page: bool = True,
     ) -> dict[str, Any]:
-        if not self._page:
-            return {"success": False, "error": "Session not started"}
-
-        result: dict[str, Any] = {"success": True}
-
-        try:
+        async def _action(result: dict) -> None:
             if path:
                 await self._page.screenshot(path=path, full_page=full_page)
                 result["path"] = path
             else:
                 b64 = await self._take_screenshot_b64(full_page=full_page)
                 result["screenshot"] = b64
-        except Exception as e:
-            result["success"] = False
-            result["error"] = str(e)
 
-        return result
+        return await self._page_op(_action)
 
     async def _take_screenshot_b64(self, full_page: bool = True) -> str:
         ss_bytes = await self._page.screenshot(full_page=full_page)
         return base64.b64encode(ss_bytes).decode()
 
     async def get_cookies(self) -> dict[str, Any]:
+        guard = self._guard_page()
+        if guard:
+            return guard  # cookies needs self._context, but _guard_page checks _page
         if not self._context:
             return {"success": False, "error": "Session not started"}
 

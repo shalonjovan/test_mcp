@@ -1,4 +1,3 @@
-from pathlib import Path
 
 from testing_mcp.utils.config import _deep_merge, load_raw_config
 

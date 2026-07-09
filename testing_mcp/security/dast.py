@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-import time
 from typing import Any
 from urllib.parse import urljoin, urlparse, urlencode, parse_qs
 

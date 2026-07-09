@@ -5,7 +5,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-from testing_mcp.runners.base import TestResult
 
 
 def _get_build_command(project_root: Path) -> list[str] | None:
