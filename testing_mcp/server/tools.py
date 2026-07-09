@@ -46,11 +46,22 @@ from testing_mcp.security.secrets import scan_for_secrets
 from testing_mcp.security.tls import check_tls
 from testing_mcp.server.state import get_start_time
 from testing_mcp.ui.accessibility import check_color_contrast, run_accessibility_scan
+from testing_mcp.utils.validators import validate_project_path, validate_url, validate_command
 from testing_mcp.ui.playwright import run_ui_test_sync
 from testing_mcp.ui.visual_regression import compare_screenshots, generate_diff_gif, take_screenshot
 
 
 __all__ = ["register_tools"]
+
+
+def _resolve_path(path: str) -> Path:
+    """Resolve and validate a project path."""
+    return validate_project_path(path)
+
+
+def _resolve_url(url: str, allow_internal: bool = False) -> str:
+    """Validate a URL."""
+    return validate_url(url, allow_internal=allow_internal)
 
 
 def _browser_sess(session_id: str) -> tuple:
@@ -84,7 +95,7 @@ def register_tools(mcp: FastMCP) -> None:
     @mcp.tool()
     def analyze_project_tool(path: str = ".") -> dict:
         """Analyze a project and detect its language, framework, and structure."""
-        root = Path(path).resolve()
+        root = _resolve_path(path)
         return analyze_project(root)
 
     @mcp.tool()
@@ -94,7 +105,7 @@ def register_tools(mcp: FastMCP) -> None:
         test_names: list[str] | None = None,
     ) -> dict:
         """Discover and run tests in the project."""
-        root = Path(path).resolve()
+        root = _resolve_path(path)
         analysis = analyze_project(root)
         results: list[dict] = []
 
@@ -133,7 +144,7 @@ def register_tools(mcp: FastMCP) -> None:
         timeout: int = 30,
     ) -> dict:
         """Test a console application with stdin/stdout/exit code checks."""
-        root = Path(path).resolve()
+        root = _resolve_path(path)
         return run_console_test(
             root,
             input_data=input_data,
@@ -149,7 +160,7 @@ def register_tools(mcp: FastMCP) -> None:
         timeout: int = 60,
     ) -> dict:
         """Fuzz test a console application with random inputs."""
-        root = Path(path).resolve()
+        root = _resolve_path(path)
         results = run_fuzz_test(root, iterations=iterations, timeout=timeout)
         return {
             "project": str(root),
@@ -191,7 +202,7 @@ def register_tools(mcp: FastMCP) -> None:
             content = generate_markdown_report(results, title)
 
         if output:
-            out_path = Path(output)
+            out_path = _resolve_path(output)
             out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_text(content)
 
@@ -209,6 +220,7 @@ def register_tools(mcp: FastMCP) -> None:
         timeout: float = 30.0,
     ) -> dict:
         """Test an API endpoint with request/response validation."""
+        _resolve_url(base_url)
         return run_api_test_sync(
             base_url=base_url,
             method=method,
@@ -234,7 +246,7 @@ def register_tools(mcp: FastMCP) -> None:
         check_type: str = "all",
     ) -> dict:
         """Validate database migrations, constraints, and rollbacks."""
-        root = Path(path).resolve()
+        root = _resolve_path(path)
         db_types = detect_database(root)
         db_type = max(db_types, key=db_types.get) if db_types else "sqlite"
 
@@ -263,7 +275,7 @@ def register_tools(mcp: FastMCP) -> None:
     ) -> dict:
         """Run performance benchmarks (startup time, API latency, or load test)."""
         if type == "startup" and command:
-            cmd_parts = command.split()
+            cmd_parts = validate_command(command)
             return measure_startup_time(cmd_parts, iterations=iterations)
 
         if type == "latency" and url:
@@ -290,7 +302,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         Scan types: all, sast, secrets, headers, tls, deps, bandit, semgrep
         """
-        root = Path(path).resolve()
+        root = _resolve_path(path)
         return run_security_scan(
             path=root,
             scan_type=scan_type,
@@ -312,6 +324,7 @@ def register_tools(mcp: FastMCP) -> None:
     @mcp.tool()
     def scan_headers(url: str) -> dict:
         """Check HTTP security headers (HSTS, CSP, X-Frame-Options, etc.)."""
+        _resolve_url(url)
         return scan_headers_sync(url)
 
     @mcp.tool()
@@ -327,6 +340,7 @@ def register_tools(mcp: FastMCP) -> None:
         dry_run: bool = True,
     ) -> dict:
         """Generate unit tests for a source file."""
+        _resolve_path(source_file)
         test_data = generate_unit_tests(source_file, framework=framework, functions=functions)
         save_result = save_generated_tests(test_data, dry_run=dry_run)
         return {**test_data, **save_result}
@@ -340,7 +354,7 @@ def register_tools(mcp: FastMCP) -> None:
         """Analyze log content for errors and patterns."""
         if log_file:
             try:
-                log_content = Path(log_file).read_text()
+                log_content = _resolve_path(log_file).read_text()
             except (OSError, FileNotFoundError) as e:
                 return {"error": f"Could not read log file: {e}"}
 
@@ -446,7 +460,7 @@ def register_tools(mcp: FastMCP) -> None:
     @mcp.tool()
     def detect_mobile(path: str = ".") -> dict:
         """Detect if the project is a mobile app (Android, Flutter, React Native)."""
-        root = Path(path).resolve()
+        root = _resolve_path(path)
         return detect_mobile_project(root)
 
     @mcp.tool()
@@ -456,7 +470,7 @@ def register_tools(mcp: FastMCP) -> None:
         test_type: str = "unit",
     ) -> dict:
         """Run mobile app tests (Android or Flutter)."""
-        root = Path(path).resolve()
+        root = _resolve_path(path)
         if platform == "flutter":
             return run_flutter_tests(root)
         return run_android_tests(root, test_type=test_type)
@@ -464,7 +478,7 @@ def register_tools(mcp: FastMCP) -> None:
     @mcp.tool()
     def detect_game(path: str = ".") -> dict:
         """Detect if the project is a game (Godot, Unity, Unreal)."""
-        root = Path(path).resolve()
+        root = _resolve_path(path)
         return detect_game_project(root)
 
     @mcp.tool()
@@ -473,7 +487,7 @@ def register_tools(mcp: FastMCP) -> None:
         engine: str = "auto",
     ) -> dict:
         """Run game engine tests."""
-        root = Path(path).resolve()
+        root = _resolve_path(path)
         if engine == "auto":
             detected = detect_game_project(root)
             engines = detected.get("engines", [])
@@ -492,7 +506,7 @@ def register_tools(mcp: FastMCP) -> None:
     @mcp.tool()
     def infrastructure_info(path: str = ".") -> dict:
         """Get infrastructure info (Docker, K8s, CI config)."""
-        root = Path(path).resolve()
+        root = _resolve_path(path)
         return {
             "infrastructure": get_infrastructure_info(),
             "ci_config": detect_ci_config(root),
@@ -551,6 +565,7 @@ def register_tools(mcp: FastMCP) -> None:
         timeout: float = 10.0,
     ) -> dict:
         """Test a WebSocket connection."""
+        _resolve_url(url)
         return asyncio.run(run_ws(url, message=message or None, timeout=timeout))
 
     @mcp.tool()
@@ -562,6 +577,7 @@ def register_tools(mcp: FastMCP) -> None:
         timeout: float = 30.0,
     ) -> dict:
         """Test a gRPC endpoint."""
+        _resolve_url(url)
         return asyncio.run(run_grpc(url, service=service, method=method, request_body=request_body, timeout=timeout))
 
     @mcp.tool()
@@ -572,8 +588,8 @@ def register_tools(mcp: FastMCP) -> None:
     @mcp.tool()
     def profile_resources(command: str, iterations: int = 3) -> dict:
         """Measure startup time and resource usage of a command."""
-        from pathlib import Path
-        return measure_startup_resources(command.split(), cwd=Path.cwd(), iterations=iterations)
+        cmd_parts = validate_command(command)
+        return measure_startup_resources(cmd_parts, cwd=Path.cwd(), iterations=iterations)
 
     @mcp.tool()
     def profile_api(url: str, iterations: int = 10) -> dict:
@@ -626,7 +642,7 @@ def register_tools(mcp: FastMCP) -> None:
         test_patterns: list[str] | None = None,
     ) -> dict:
         """Discover and run integration tests."""
-        root = Path(path).resolve()
+        root = _resolve_path(path)
         return run_integration_tests(root, test_patterns=test_patterns)
 
     @mcp.tool()
@@ -636,7 +652,7 @@ def register_tools(mcp: FastMCP) -> None:
         path: str = ".",
     ) -> dict:
         """Run smoke tests (check endpoints or commands respond)."""
-        root = Path(path).resolve()
+        root = _resolve_path(path)
         return run_smoke_tests(root, endpoints=endpoints, commands=commands)
 
     @mcp.tool()
@@ -728,6 +744,7 @@ def register_tools(mcp: FastMCP) -> None:
         """Navigate to a URL using the stealth browser session.
         Automatically handles Cloudflare challenges with retry logic.
         Returns page title, status code, and optional base64 screenshot."""
+        _resolve_url(url, allow_internal=False)
         sess, err = _browser_sess(session_id)
         if err:
             return err
