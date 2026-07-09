@@ -48,7 +48,24 @@ Create a `testing-mcp.toml` file in your project root:
 [server]
 host = "127.0.0.1"
 port = 8080
+
+# Environment variables also supported:
+#   TESTING_MCP_HOST=0.0.0.0
+#   TESTING_MCP_PORT=8080
+#   TESTING_MCP_LOG_LEVEL=DEBUG
 ```
+
+## Health Endpoints
+
+When running in SSE mode, the server exposes HTTP health check endpoints:
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /health` | Server status, version, uptime, tool count |
+| `GET /health/live` | Liveness probe (always 200) |
+| `GET /health/ready` | Readiness probe (always 200) |
+
+Used by Docker, K8s, and monitoring systems.
 
 ## MCP Tools (62 total)
 
@@ -228,7 +245,7 @@ testing_mcp/
 │                   # dependency scanning (OSV.dev), config (Docker/K8s/CI),
 │                   # web crawling, reporter
 ├── server/         # MCP server + tool registration
-├── tests/          # Test suite (179+ tests covering all modules)
+├── tests/          # Test suite (220+ tests covering all modules)
 ├── ui/             # Playwright UI automation + accessibility + visual regression
 └── utils/          # Configuration, utilities
 ```
@@ -237,13 +254,14 @@ testing_mcp/
 
 ```bash
 pip install -e ".[dev]"
-pytest testing_mcp/tests/ -v
+pytest testing_mcp/tests/ -v --cov --cov-report=term-missing
 ```
 
 ## Docker
 
 ```bash
-docker compose up
+docker build -t testing-mcp .
+docker run -p 8080:8080 testing-mcp
 ```
 
 ## License
