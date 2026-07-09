@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import re
 from pathlib import Path
 from urllib.parse import urlparse
@@ -8,6 +9,15 @@ from testing_mcp.exceptions import ValidationError
 
 SAFE_URL_SCHEMES = {"http", "https"}
 BLOCKED_HOSTS = {"0.0.0.0", "127.0.0.1", "localhost", "::1", "metadata.google.internal"}
+PRIVATE_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+]
 ALLOWED_PROJECT_EXTENSIONS = {".py", ".js", ".ts", ".jsx", ".tsx", ".go", ".rs", ".java", ".kt", ".swift", ".toml", ".json", ".yaml", ".yml", ".md", ".txt", ".cfg", ".ini", ".conf", ".env", ".sh", ".bash", ".zsh", ".sql", ".xml", ".html", ".css", ".scss", ".less", ".vue", ".svelte"}
 
 
@@ -34,11 +44,22 @@ def validate_url(url: str, allow_internal: bool = False) -> str:
             details={"url": url, "allowed_schemes": list(SAFE_URL_SCHEMES)},
         )
     host = parsed.hostname or ""
-    if not allow_internal and host in BLOCKED_HOSTS:
-        raise ValidationError(
-            f"URL points to internal host '{host}' which is not allowed",
-            details={"url": url},
-        )
+    if not allow_internal:
+        if host in BLOCKED_HOSTS:
+            raise ValidationError(
+                f"URL points to internal host '{host}' which is not allowed",
+                details={"url": url},
+            )
+        try:
+            ip = ipaddress.ip_address(host)
+            for net in PRIVATE_NETWORKS:
+                if ip in net:
+                    raise ValidationError(
+                        f"URL points to private network host '{host}' which is not allowed",
+                        details={"url": url},
+                    )
+        except ValueError:
+            pass  # not an IP address, hostname is fine
     return url
 
 

@@ -26,6 +26,7 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
+    "pytest-cov>=5.0.0",
     "ruff>=0.3.0",
 ]
 performance = [
@@ -48,4 +49,18 @@ target-version = "py311"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_test_loop_scope = "function"
 testpaths = ["testing_mcp/tests"]
+
+[tool.coverage.run]
+source = ["testing_mcp"]
+omit = ["testing_mcp/tests/*"]
+relative_files = true
+
+[tool.coverage.report]
+fail_under = 0
+show_missing = true
+skip_empty = true
+
+[tool.coverage.html]
+directory = "htmlcov"
